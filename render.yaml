@@ -1,0 +1,9 @@
+# Render Blueprint: New > Blueprint, pick this repo. Render sets PORT itself.
+services:
+  - type: web
+    name: drop-chess
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true

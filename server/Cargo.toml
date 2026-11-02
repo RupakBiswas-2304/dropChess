@@ -1,0 +1,26 @@
+[package]
+name = "dropchess-server"
+version = "0.1.0"
+edition = "2021"
+description = "LAN PvP server for Drop Chess"
+license = "PolyForm-Noncommercial-1.0.0"
+publish = false
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[dependencies]
+dropchess = { path = "../engine" }
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+futures-util = "0.3"
+rand = "0.8"
+tract-onnx = "0.21"
+anyhow = "1"
+
+[dev-dependencies]
+sha2 = "0.10"

@@ -1,0 +1,8 @@
+torch>=2.3
+numpy
+chess>=1.10        # python-chess, for the reference engine and tests
+pyyaml
+onnx
+onnxruntime
+maturin>=1.5,<2    # builds the Rust module: maturin develop --release -m ../pyengine/Cargo.toml
+pytest

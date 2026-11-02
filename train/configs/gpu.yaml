@@ -1,0 +1,50 @@
+# NVIDIA GPU with 6 GB+ VRAM. All hyperparameters in one place.
+
+# network
+blocks: 8
+channels: 96
+
+# MCTS / self-play
+sims: 200              # full search
+sims_fast: 40          # quick search (playout cap randomisation)
+p_full: 0.25           # share of moves that get a full search; only those become training data
+c_puct: 2.0
+fpu_reduction: 0.2
+fpu_root: 0.0
+dirichlet_alpha: 0.1
+dirichlet_frac: 0.25
+temp_plies: 30         # sample moves by visit count for the first 30 plies
+max_plies: 300         # capped games are draws (scored by material while adjudicate_gens lasts)
+topk: 128              # policy entries kept per position
+games_per_gen: 256
+parallel: 256          # games played at once = network batch size
+variants: [drop, crazy]
+material_blend: 0.5     # weight of a material score in self-play search leaves (bootstrap)
+blend_full_gens: 20     # full weight for this many generations
+blend_zero_gen: 50      # then fades linearly to 0 by this generation; eval and the browser never use it
+adjudicate_gens: 10    # score capped games by material for the first N generations
+
+# training
+buffer_size: 500000    # ~1.7 GB RAM
+min_buffer: 20000
+batch_size: 512
+sample_reuse: 8        # each new position is seen ~8 times on average
+min_steps: 100
+max_steps: 1000
+lr: 0.001
+lr_min_frac: 0.1       # cosine decay to lr * 0.1 within each generation
+weight_decay: 0.0001
+value_weight: 1.0
+value_q_mix: 0.5        # value target = (1-mix) * game result + mix * root search value
+mirror_augment: true
+amp: true
+
+# evaluation
+eval_every: 5
+eval_games: 100        # per variant, per opponent
+eval_sims: 64
+eval_temp_plies: 8
+eval_parallel: 256
+
+generations: 1000      # stop with Ctrl-C whenever; re-running resumes
+keep_checkpoints: 0    # 0 = keep all

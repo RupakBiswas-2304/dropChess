@@ -1,0 +1,13 @@
+target/
+node_modules/
+web/dist/
+train/checkpoints*/
+train/.venv/
+train/eval/smoke_results.csv
+train/eval/check_results.csv
+__pycache__/
+.pytest_cache/
+*.so
+train/*.log
+train/eval/*.log
+.DS_Store

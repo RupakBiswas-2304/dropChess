@@ -1,0 +1,128 @@
+[
+ {
+  "fen": "4k3/8/8/8/8/8/8/4K3[QRRBBNNPPPPPPPPqrrbbnnpppppppp] w - - 0 1",
+  "variant": "drop",
+  "perft": {
+   "1": 153,
+   "2": 22283,
+   "3": 3234790
+  }
+ },
+ {
+  "fen": "4k3/8/8/8/8/8/8/4K3[QRRBBNNPPPPPPPPqrrbbnnpppppppp] w - - 0 1",
+  "variant": "crazy",
+  "perft": {
+   "1": 153,
+   "2": 22283,
+   "3": 3234790
+  }
+ },
+ {
+  "fen": "r3k3/pp6/2n5/8/3Q4/2N2B2/PP6/4K3[RBNPPPPPPrbbnpppppp] w - - 0 12",
+  "variant": "drop",
+  "perft": {
+   "1": 146,
+   "2": 16141,
+   "3": 2047884
+  }
+ },
+ {
+  "fen": "r3k3/pp6/2n5/8/3Q4/2N2B2/PP6/4K3[RBNPPPPPPrbbnpppppp] w - - 0 12",
+  "variant": "crazy",
+  "perft": {
+   "1": 146,
+   "2": 16141,
+   "3": 2047884
+  }
+ },
+ {
+  "fen": "4k3/8/8/8/8/8/3q4/4K3[QRN] w - - 0 1",
+  "variant": "drop",
+  "perft": {
+   "1": 2,
+   "2": 33,
+   "3": 2419
+  }
+ },
+ {
+  "fen": "4k3/8/8/8/8/8/3q4/4K3[QRN] w - - 0 1",
+  "variant": "crazy",
+  "perft": {
+   "1": 2,
+   "2": 33,
+   "3": 2419
+  }
+ },
+ {
+  "fen": "4k3/8/8/8/3pP3/8/8/4K3[Pp] b - e3 0 1",
+  "variant": "drop",
+  "perft": {
+   "1": 31,
+   "2": 866,
+   "3": 10829
+  }
+ },
+ {
+  "fen": "4k3/8/8/8/3pP3/8/8/4K3[Pp] b - e3 0 1",
+  "variant": "crazy",
+  "perft": {
+   "1": 31,
+   "2": 866,
+   "3": 10829
+  }
+ },
+ {
+  "fen": "4k3/1P6/8/8/8/8/6p1/4K3[NNnn] w - - 0 1",
+  "variant": "drop",
+  "perft": {
+   "1": 38,
+   "2": 1417,
+   "3": 56725
+  }
+ },
+ {
+  "fen": "4k3/1P6/8/8/8/8/6p1/4K3[NNnn] w - - 0 1",
+  "variant": "crazy",
+  "perft": {
+   "1": 38,
+   "2": 1417,
+   "3": 56725
+  }
+ },
+ {
+  "fen": "r1b1k2r/ppp2ppp/2n5/3q4/8/2N2N2/PPP2PPP/R1BQK2R[BPbp] w - - 0 10",
+  "variant": "drop",
+  "perft": {
+   "1": 70,
+   "2": 5769,
+   "3": 341527
+  }
+ },
+ {
+  "fen": "r1b1k2r/ppp2ppp/2n5/3q4/8/2N2N2/PPP2PPP/R1BQK2R[BPbp] w - - 0 10",
+  "variant": "crazy",
+  "perft": {
+   "1": 70,
+   "2": 5769,
+   "3": 344042
+  }
+ },
+ {
+  "fen": "4k3/8/8/8/8/8/8/q~3K3[Rr] w - - 0 1",
+  "variant": "drop",
+  "perft": {
+   "1": 6,
+   "2": 325,
+   "3": 6173
+  }
+ },
+ {
+  "fen": "4k3/8/8/8/8/8/8/q~3K3[Rr] w - - 0 1",
+  "variant": "crazy",
+  "perft": {
+   "1": 6,
+   "2": 325,
+   "3": 6173
+  }
+ }
+]
