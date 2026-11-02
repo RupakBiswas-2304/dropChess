@@ -2,6 +2,8 @@
 
 A chess variant where both armies start in reserve. Play it in the browser against a friend, on one screen, or against an AlphaZero-style bot trained from scratch by self-play.
 
+**▶ Play now: [drop-chess.onrender.com](https://drop-chess.onrender.com/)** (hosted on Render's free plan, so the first visit after a quiet spell can take about a minute to wake up)
+
 ![A game against the bot](docs/screenshots/game-vs-bot.png)
 
 ## Contents
