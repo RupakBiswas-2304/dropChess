@@ -230,6 +230,8 @@ impl Room {
             "check": check,
             "lastMove": self.game.moves().last().map(Move::uci),
             "sans": self.game.sans(),
+            "fens": self.game.fens(),
+            "ucis": self.game.moves().iter().map(Move::uci).collect::<Vec<_>>(),
             "players": { "white": player(0), "black": player(1) },
             "rematch": { "white": self.rematch[0], "black": self.rematch[1] },
             "clock": self.clock_json(),

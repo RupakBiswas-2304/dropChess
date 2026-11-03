@@ -13,6 +13,10 @@ import {
   type TimeControl,
   type Variant,
 } from "./net";
+import { applyTheme, cycleTheme, effectiveTheme, themeChoice, themeLabel } from "./theme";
+import { play, soundEnabled, soundForSan, toggleSound } from "./sound";
+import { parseFen, type Reserve } from "./fen";
+import { annotationsSvg, clearAnnotations, colorFor, hasAnnotations, toggleMark, type Arrow } from "./annotations";
 
 // ---------- state ----------
 
@@ -41,6 +45,12 @@ interface UI {
   botColor: "white" | "random" | "black";
   /** Clock values from the last state, plus when we received them (performance.now()). */
   clockBase: { white: number; black: number; running: ColorName | null; at: number } | null;
+  /** Ply being viewed in the move history, or null for the live position (issue #3). */
+  viewPly: number | null;
+  /** Right-drag in progress for a planning arrow (issue #4). */
+  drawing: { from: number; to: number; color: Arrow["color"] } | null;
+  /** The low-time warning sound has played for this game. */
+  lowWarned: boolean;
 }
 
 const TIME_CONTROLS: { label: string; speed: string; tc: TimeControl | null }[] = [
@@ -92,7 +102,11 @@ const ui: UI = {
   botLevel: (store.get("dropchess.botLevel") as BotLevel) ?? "medium",
   botColor: "random",
   clockBase: null,
+  viewPly: null,
+  drawing: null,
+  lowWarned: false,
 };
+applyTheme();
 if (!["easy", "medium", "hard"].includes(ui.botLevel)) ui.botLevel = "medium";
 if (!(ui.tcIndex >= 0 && ui.tcIndex < TIME_CONTROLS.length)) ui.tcIndex = 2;
 
@@ -171,6 +185,20 @@ function onMessage(msg: ServerMsg) {
     case "state": {
       const prev = ui.state;
       ui.state = msg;
+      const sameGame = !!prev && prev.room === msg.room && msg.sans.length >= prev.sans.length;
+      if (!sameGame) {
+        ui.viewPly = null;
+        ui.lowWarned = false;
+        clearAnnotations();
+      }
+      if (ui.viewPly !== null && ui.viewPly >= msg.sans.length) ui.viewPly = null;
+      if (prev && sameGame && msg.sans.length > prev.sans.length) {
+        clearAnnotations();
+        play(soundForSan(msg.sans[msg.sans.length - 1]));
+      }
+      const startedNow = msg.status.kind === "ongoing" && msg.sans.length === 0 && bothSeated(msg) && (!prev || !sameGame || !bothSeated(prev));
+      if (startedNow) play("start");
+      if (prev && sameGame && prev.status.kind === "ongoing" && msg.status.kind !== "ongoing") window.setTimeout(() => play("end"), 180);
       ui.clockBase = msg.clock
         ? { white: msg.clock.white, black: msg.clock.black, running: msg.clock.running, at: performance.now() }
         : null;
@@ -337,7 +365,7 @@ function bothSeated(s: GameState): boolean {
 
 function canMove(): boolean {
   const s = ui.state;
-  if (!s || s.status.kind !== "ongoing" || !bothSeated(s)) return false;
+  if (!s || s.status.kind !== "ongoing" || !bothSeated(s) || ui.viewPly !== null) return false;
   return ui.myColor === "both" || ui.myColor === s.side;
 }
 
@@ -385,7 +413,7 @@ function renderLobby() {
   app.innerHTML = `
   <main class="lobby">
     <header>
-      <div class="brand-row">${wordmark(22)}<span id="conn" class="conn ${ui.connected ? "on" : "off"}"></span></div>
+      <div class="brand-row">${wordmark(22)}<div class="brand-tools">${prefButtons()}<span id="conn" class="conn ${ui.connected ? "on" : "off"}"></span></div></div>
       <p class="tag">Start with only your king. Each turn, drop a piece on your half or make a move.</p>
       <details class="how"><summary>How to play</summary>
         <ul>
@@ -497,6 +525,48 @@ function joinRoom(code: string) {
 
 // ---------- game ----------
 
+/** What the board shows: the live position, or an earlier one from the move history. */
+interface BoardView {
+  live: boolean;
+  ply: number;
+  board: GameState["board"];
+  reserve: Record<ColorName, Reserve>;
+  side: ColorName;
+  lastMove: string | null;
+  check: number | null;
+}
+
+function boardView(): BoardView {
+  const s = ui.state!;
+  const total = s.sans.length;
+  if (ui.viewPly === null || ui.viewPly >= total || !s.fens?.[ui.viewPly]) {
+    return { live: true, ply: total, board: s.board, reserve: s.reserve, side: s.side, lastMove: s.lastMove, check: s.check };
+  }
+  const p = parseFen(s.fens[ui.viewPly]);
+  return { live: false, ply: ui.viewPly, board: p.board, reserve: p.reserve, side: p.side, lastMove: s.ucis?.[ui.viewPly - 1] ?? null, check: null };
+}
+
+function goToPly(ply: number | null) {
+  const s = ui.state;
+  if (!s) return;
+  const total = s.sans.length;
+  ui.viewPly = ply === null || ply >= total ? null : Math.max(0, ply);
+  ui.selected = null;
+  ui.promo = null;
+  renderGame();
+}
+
+function navigate(to: string) {
+  const s = ui.state;
+  if (!s) return;
+  const total = s.sans.length;
+  const cur = ui.viewPly ?? total;
+  if (to === "first") goToPly(0);
+  else if (to === "prev") goToPly(cur - 1);
+  else if (to === "next") goToPly(cur + 1);
+  else goToPly(null);
+}
+
 function legalFrom(sq: number): string[] {
   const from = sqName(sq);
   return (ui.state?.legal ?? []).filter((m) => !m.includes("@") && m.startsWith(from));
@@ -514,28 +584,24 @@ function targets(): Map<number, string[]> {
   return out;
 }
 
-function lastMoveSquares(): number[] {
-  const m = ui.state?.lastMove;
+function lastMoveSquares(m: string | null): number[] {
   if (!m) return [];
   if (m.includes("@")) return [parseSq(m.slice(2, 4))];
   return [parseSq(m.slice(0, 2)), parseSq(m.slice(2, 4))];
 }
 
-const SQ = {
-  light: "#EDE6D6",
-  dark: "#9AA785",
-  lastL: "#E8CF7A",
-  lastD: "#C9B865",
-  selL: "#B9CDE6",
-  selD: "#8FAAC4",
-};
+function squareCenter(sq: number, wb: boolean): [number, number] {
+  const f = sq % 8;
+  const r = Math.floor(sq / 8);
+  return [(wb ? f : 7 - f) * 100 + 50, (wb ? 7 - r : r) * 100 + 50];
+}
 
 function renderBoard(): string {
-  const s = ui.state!;
+  const v = boardView();
   const wb = whiteAtBottom();
-  const tg = targets();
-  const last = lastMoveSquares();
-  const sel = ui.selected;
+  const tg = v.live ? targets() : new Map<number, string[]>();
+  const last = lastMoveSquares(v.lastMove);
+  const sel = v.live ? ui.selected : null;
   const dropping = sel?.type === "drop";
   let cells = "";
   let pieces = "";
@@ -547,13 +613,13 @@ function renderBoard(): string {
     const x = (wb ? f : 7 - f) * 100;
     const y = (wb ? 7 - r : r) * 100;
     const light = (f + r) % 2 === 1;
-    let fill = light ? SQ.light : SQ.dark;
-    if (last.includes(sq)) fill = light ? SQ.lastL : SQ.lastD;
-    if (sel?.type === "sq" && sel.sq === sq) fill = light ? SQ.selL : SQ.selD;
-    cells += `<rect x="${x}" y="${y}" width="100" height="100" fill="${fill}"/>`;
-    if (dropping && (s.side === "white" ? r <= 3 : r >= 4)) cells += `<rect x="${x}" y="${y}" width="100" height="100" class="zone"/>`;
-    if (s.check === sq) cells += `<rect x="${x}" y="${y}" width="100" height="100" fill="url(#checkGlow)"/>`;
-    const p = s.board[sq];
+    let cls = light ? "sq-l" : "sq-d";
+    if (last.includes(sq)) cls = light ? "sq-last-l" : "sq-last-d";
+    if (sel?.type === "sq" && sel.sq === sq) cls = light ? "sq-sel-l" : "sq-sel-d";
+    cells += `<rect x="${x}" y="${y}" width="100" height="100" class="${cls}"/>`;
+    if (dropping && (v.side === "white" ? r <= 3 : r >= 4)) cells += `<rect x="${x}" y="${y}" width="100" height="100" class="zone"/>`;
+    if (v.check === sq) cells += `<rect x="${x}" y="${y}" width="100" height="100" fill="url(#checkGlow)"/>`;
+    const p = v.board[sq];
     if (p) {
       pieces += pieceUse(p.c, p.k, x + 3, y + 3, 94);
       if (p.promoted) pieces += `<circle cx="${x + 86}" cy="${y + 14}" r="6" class="promo-dot"/>`;
@@ -563,13 +629,18 @@ function renderBoard(): string {
         ? `<circle cx="${x + 50}" cy="${y + 50}" r="44" class="tgt-ring"/>`
         : `<circle cx="${x + 50}" cy="${y + 50}" r="14" class="tgt-dot"/>`;
     }
-    const cc = light ? SQ.dark : SQ.light;
-    if (wb ? r === 0 : r === 7) cells += `<text x="${x + 94}" y="${y + 93}" class="coord" text-anchor="end" fill="${cc}">${"abcdefgh"[f]}</text>`;
-    if (wb ? f === 0 : f === 7) cells += `<text x="${x + 6}" y="${y + 19}" class="coord" fill="${cc}">${r + 1}</text>`;
+    const cc = light ? "on-l" : "on-d";
+    if (wb ? r === 0 : r === 7) cells += `<text x="${x + 94}" y="${y + 93}" class="coord ${cc}" text-anchor="end">${"abcdefgh"[f]}</text>`;
+    if (wb ? f === 0 : f === 7) cells += `<text x="${x + 6}" y="${y + 19}" class="coord ${cc}">${r + 1}</text>`;
     hits += `<rect x="${x}" y="${y}" width="100" height="100" class="hit" data-action="sq" data-sq="${sq}" aria-label="${sqName(sq)}"/>`;
   }
   const defs = `<defs><radialGradient id="checkGlow"><stop offset="0%" stop-color="#e0402a" stop-opacity="0.9"/><stop offset="60%" stop-color="#e0402a" stop-opacity="0.45"/><stop offset="100%" stop-color="#e0402a" stop-opacity="0"/></radialGradient></defs>`;
-  return `<div class="board-wrap"><svg viewBox="0 0 800 800" class="board" role="img" aria-label="Chess board">${defs}${cells}${pieces}${marks}${hits}</svg>${boardOverlay()}</div>`;
+  const preview = ui.drawing && ui.drawing.from !== ui.drawing.to ? ui.drawing : null;
+  const plan = annotationsSvg((sq) => squareCenter(sq, wb), preview);
+  const banner = v.live
+    ? ""
+    : `<div class="history-banner">Move ${Math.ceil(v.ply / 2)}${v.ply % 2 === 1 ? "" : "…"} · viewing history <button class="link" data-action="nav" data-to="last">Back to live</button></div>`;
+  return `<div class="board-wrap ${v.live ? "" : "past"}"><svg viewBox="0 0 800 800" class="board" role="img" aria-label="Chess board">${defs}${cells}${pieces}${marks}${plan}${hits}</svg>${banner}${v.live ? boardOverlay() : ""}</div>`;
 }
 
 function boardOverlay(): string {
@@ -638,13 +709,18 @@ function updateClocks() {
     if (el.textContent !== text) el.textContent = text;
     const cls = `clock ${running ? (ms < 20_000 ? "low" : "active") : ms < 20_000 && s.status.kind === "ongoing" ? "idle low-idle" : "idle"}`;
     if (el.className !== cls) el.className = cls;
+    const mine = ui.myColor === color || (ui.myColor === "both" && running);
+    if (running && mine && ms < 10_000 && !ui.lowWarned && s.clock.initialMs > 30_000) {
+      ui.lowWarned = true;
+      play("lowtime");
+    }
   }
 }
 window.setInterval(updateClocks, 100);
 
 function renderStrip(color: ColorName): string {
   const s = ui.state!;
-  const counts = s.reserve[color];
+  const counts = boardView().reserve[color];
   const mine = ui.myColor === "both" ? s.side === color : ui.myColor === color;
   const active = mine && canMove() && s.side === color;
   const sel = ui.selected;
@@ -678,13 +754,44 @@ function renderStrip(color: ColorName): string {
 function renderMoves(): string {
   const sans = ui.state!.sans;
   if (sans.length === 0) return `<p class="empty">White starts: drop a piece or move the king.</p>`;
+  const shown = ui.viewPly ?? sans.length; // the ply whose position is on the board
+  const cell = (i: number) =>
+    i < sans.length
+      ? `<button class="mv ${i + 1 === shown ? "cur" : ""}" data-action="ply" data-ply="${i + 1}">${escapeHtml(sans[i])}</button>`
+      : "<span></span>";
   let rows = "";
   for (let i = 0; i < sans.length; i += 2) {
-    const lastW = i === sans.length - 1;
-    const lastB = i + 1 === sans.length - 1;
-    rows += `<li><span class="num">${i / 2 + 1}.</span><span class="${lastW ? "cur" : ""}">${escapeHtml(sans[i])}</span><span class="${lastB ? "cur" : ""}">${escapeHtml(sans[i + 1] ?? "")}</span></li>`;
+    rows += `<li><span class="num">${i / 2 + 1}.</span>${cell(i)}${cell(i + 1)}</li>`;
   }
   return `<ol class="moves" id="moves">${rows}</ol>`;
+}
+
+function renderNav(): string {
+  const total = ui.state!.sans.length;
+  const cur = ui.viewPly ?? total;
+  const b = (to: string, label: string, title: string, disabled: boolean) =>
+    `<button class="nav-btn" data-action="nav" data-to="${to}" title="${title}" aria-label="${title}" ${disabled ? "disabled" : ""}>${label}</button>`;
+  return `<div class="nav">${b("first", "«", "First position (Home)", cur === 0)}${b("prev", "‹", "Previous move (←)", cur === 0)}${b("next", "›", "Next move (→)", cur >= total)}${b("last", "»", "Live position (End)", cur >= total)}</div>`;
+}
+
+const THEME_ICON = {
+  system: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  dark: '<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
+};
+const SOUND_ICON = {
+  on: '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>',
+  off: '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 6 6M22 9l-6 6"/>',
+};
+const svgIcon = (paths: string) =>
+  `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+
+/** Theme and sound toggles, shown in the lobby and the game's top bar. */
+function prefButtons(): string {
+  const t = themeChoice();
+  const on = soundEnabled();
+  return `<button class="icon-btn" data-action="theme" title="${themeLabel(t)}" aria-label="${themeLabel(t)}">${svgIcon(THEME_ICON[t])}</button>
+    <button class="icon-btn" data-action="sound" title="${on ? "Sound on" : "Sound off"}" aria-label="${on ? "Sound on" : "Sound off"}">${svgIcon(on ? SOUND_ICON.on : SOUND_ICON.off)}</button>`;
 }
 
 function renderGame() {
@@ -714,6 +821,7 @@ function renderGame() {
       <span class="pill">${tcLabel(s.clock)}</span>
       ${s.local ? "" : `<span class="code top-code" title="Game code">${s.room}</span>`}
       <span id="conn" class="conn ${ui.connected ? "on" : "off"}"></span>
+      ${prefButtons()}
       <button class="icon-btn" data-action="leave" title="${over || waiting || s.local ? "Back to lobby" : "Leave game (counts as a loss)"}">${icon("exit")}</button>
     </div>
   </header>
@@ -727,14 +835,20 @@ function renderGame() {
     <aside class="side-r">
       <div class="label">MOVES</div>
       <div class="moves-wrap">${renderMoves()}</div>
+      ${s.sans.length > 0 ? renderNav() : ""}
       <div class="actions">${actions}</div>
     </aside>
   </main>
   <div id="toast" class="toast ${ui.toast ? "show" : ""}">${ui.toast ? escapeHtml(ui.toast) : ""}</div>`;
   const mv = document.getElementById("moves");
   if (mv) {
-    mv.parentElement!.scrollTop = mv.parentElement!.scrollHeight;
-    mv.parentElement!.scrollLeft = mv.parentElement!.scrollWidth;
+    const cur = mv.querySelector<HTMLElement>(".mv.cur");
+    const wrap = mv.parentElement!;
+    if (cur && ui.viewPly !== null) cur.scrollIntoView({ block: "nearest", inline: "nearest" });
+    else {
+      wrap.scrollTop = wrap.scrollHeight;
+      wrap.scrollLeft = wrap.scrollWidth;
+    }
   }
   updateClocks();
 }
@@ -748,7 +862,9 @@ function sendMove(uci: string) {
 
 function onSquare(sq: number) {
   const s = ui.state;
-  if (!s || !canMove()) return;
+  if (!s) return;
+  if (ui.viewPly !== null) return goToPly(null);
+  if (!canMove()) return;
   const tg = targets();
   if (tg.has(sq)) {
     const moves = tg.get(sq)!;
@@ -820,7 +936,31 @@ app.addEventListener("click", (e) => {
       joinRoom(d.room!);
       break;
     case "sq":
+      if (hasAnnotations()) {
+        clearAnnotations();
+        if (!canMove() && ui.viewPly === null) {
+          renderGame();
+          break;
+        }
+      }
       onSquare(Number(d.sq));
+      break;
+    case "ply":
+      goToPly(Number(d.ply));
+      break;
+    case "nav":
+      navigate(d.to!);
+      break;
+    case "theme":
+      cycleTheme();
+      showToast(`${themeLabel()}${themeChoice() === "system" ? ` (${effectiveTheme()})` : ""}`);
+      if (ui.screen === "game") renderGame();
+      else renderLobby();
+      break;
+    case "sound":
+      showToast(toggleSound() ? "Sound on" : "Sound off");
+      if (ui.screen === "game") renderGame();
+      else renderLobby();
       break;
     case "res":
       if (!canMove()) return;
@@ -887,11 +1027,56 @@ app.addEventListener("click", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && ui.screen === "game" && (ui.selected || ui.promo)) {
+  if (ui.screen !== "game" || !ui.state) return;
+  const typing = (e.target as HTMLElement)?.closest?.("input, textarea, select");
+  if (typing) return;
+  if (e.key === "Escape" && (ui.selected || ui.promo || hasAnnotations())) {
     ui.selected = null;
     ui.promo = null;
+    clearAnnotations();
     renderGame();
+    return;
   }
+  const keys: Record<string, string> = { ArrowLeft: "prev", ArrowRight: "next", ArrowUp: "first", ArrowDown: "last", Home: "first", End: "last" };
+  if (keys[e.key] && ui.state.sans.length > 0) {
+    e.preventDefault();
+    navigate(keys[e.key]);
+  }
+});
+
+// ---------- planning arrows (right mouse button) ----------
+
+const hitSquare = (target: EventTarget | null): number | null => {
+  const el = (target as Element | null)?.closest?.("rect.hit") as SVGElement | null;
+  return el ? Number(el.dataset.sq) : null;
+};
+
+app.addEventListener("contextmenu", (e) => {
+  if ((e.target as Element).closest(".board-wrap")) e.preventDefault();
+});
+
+app.addEventListener("pointerdown", (e) => {
+  if (e.button !== 2) return;
+  const sq = hitSquare(e.target);
+  if (sq === null) return;
+  e.preventDefault();
+  ui.drawing = { from: sq, to: sq, color: colorFor(e) };
+});
+
+app.addEventListener("pointermove", (e) => {
+  if (!ui.drawing) return;
+  const sq = hitSquare(document.elementFromPoint(e.clientX, e.clientY));
+  if (sq === null || sq === ui.drawing.to) return;
+  ui.drawing.to = sq;
+  renderGame();
+});
+
+window.addEventListener("pointerup", (e) => {
+  if (e.button !== 2 || !ui.drawing) return;
+  const end = hitSquare(document.elementFromPoint(e.clientX, e.clientY)) ?? ui.drawing.to;
+  toggleMark(ui.drawing.from, end, ui.drawing.color);
+  ui.drawing = null;
+  if (ui.screen === "game") renderGame();
 });
 
 // First paint: show the game shell while rejoining or joining from a link.
