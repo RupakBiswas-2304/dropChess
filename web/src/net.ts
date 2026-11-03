@@ -54,6 +54,10 @@ export interface GameState {
   check: number | null;
   lastMove: string | null;
   sans: string[];
+  /** FEN after each ply: fens[0] is the start position, fens[sans.length] the current one. */
+  fens: string[];
+  /** Moves played, in UCI (e2e4, N@f3). */
+  ucis: string[];
   players: Record<ColorName, PlayerView | null>;
   rematch: Record<ColorName, boolean>;
   clock: ClockView | null;

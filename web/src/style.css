@@ -1,15 +1,85 @@
 :root {
   --bg: #f6f4ef;
+  --surface: #ffffff;
   --ink: #1c1b19;
+  /* text and icons drawn on an --ink background */
+  --on-ink: #ffffff;
   --muted: #8a857c;
   --line: #e4dfd4;
   --seg: #ece8df;
-  --white: #ffffff;
   --red: #c8442b;
   --ok: #4e9a5b;
+  --badge: #1c1b19;
+  /* behind reserve and promotion pieces, so both piece colours stay readable */
+  --res-bg: transparent;
+  --res-on: #ffffff;
+  --seg-on: #ffffff;
+  --overlay: rgba(246, 244, 239, 0.55);
+  --overlay-strong: rgba(246, 244, 239, 0.72);
+  --card-shadow: 0 10px 40px rgba(28, 27, 25, 0.14);
+  --sq-light: #ede6d6;
+  --sq-dark: #9aa785;
+  --sq-last-light: #e8cf7a;
+  --sq-last-dark: #c9b865;
+  --sq-sel-light: #b9cde6;
+  --sq-sel-dark: #8faac4;
   --radius: 12px;
   --play: min(640px, calc(100vh - 220px), calc(100vw - 32px));
   color-scheme: light;
+}
+
+/* Dark theme: chosen explicitly, or following the system when no choice is saved. */
+:root[data-theme="dark"] {
+  --bg: #151412;
+  --surface: #1f1d1a;
+  --ink: #ece7dd;
+  --on-ink: #151412;
+  --muted: #9a948a;
+  --line: #312e29;
+  --seg: #27241f;
+  --red: #e0664b;
+  --ok: #5fb06c;
+  --badge: #2b2824;
+  --res-bg: #cfc7b4;
+  --res-on: #e9e2d1;
+  --seg-on: #3b3731;
+  --overlay: rgba(21, 20, 18, 0.5);
+  --overlay-strong: rgba(21, 20, 18, 0.68);
+  --card-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  --sq-light: #d9d1bf;
+  --sq-dark: #869371;
+  --sq-last-light: #d7bf6a;
+  --sq-last-dark: #b4a454;
+  --sq-sel-light: #a9bdd6;
+  --sq-sel-dark: #7f9ab4;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151412;
+    --surface: #1f1d1a;
+    --ink: #ece7dd;
+    --on-ink: #151412;
+    --muted: #9a948a;
+    --line: #312e29;
+    --seg: #27241f;
+    --red: #e0664b;
+    --ok: #5fb06c;
+    --badge: #2b2824;
+    --res-bg: #cfc7b4;
+    --res-on: #e9e2d1;
+    --seg-on: #3b3731;
+    --overlay: rgba(21, 20, 18, 0.5);
+    --overlay-strong: rgba(21, 20, 18, 0.68);
+    --card-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    --sq-light: #d9d1bf;
+    --sq-dark: #869371;
+    --sq-last-light: #d7bf6a;
+    --sq-last-dark: #b4a454;
+    --sq-sel-light: #a9bdd6;
+    --sq-sel-dark: #7f9ab4;
+    color-scheme: dark;
+  }
 }
 
 * {
@@ -60,7 +130,7 @@ button {
   padding: 0 14px;
   border-radius: 10px;
   border: 1px solid var(--line);
-  background: var(--white);
+  background: var(--surface);
   font: 500 15px Inter, system-ui, sans-serif;
   color: var(--ink);
 }
@@ -103,7 +173,7 @@ button {
 .btn.primary {
   background: var(--ink);
   border-color: var(--ink);
-  color: var(--white);
+  color: var(--on-ink);
   font-weight: 600;
 }
 .btn.primary.big {
@@ -113,7 +183,7 @@ button {
 .btn.danger {
   background: var(--red);
   border-color: var(--red);
-  color: var(--white);
+  color: var(--on-ink);
 }
 .btn.sm {
   height: 30px;
@@ -187,7 +257,7 @@ button {
   width: calc(var(--wm) + 12px);
   height: calc(var(--wm) + 12px);
   border-radius: 8px;
-  background: var(--ink);
+  background: var(--badge);
   display: grid;
   place-items: center;
   flex: none;
@@ -265,7 +335,7 @@ button {
   color: var(--muted);
 }
 .seg button.on {
-  background: var(--white);
+  background: var(--seg-on);
   box-shadow: 0 1px 3px rgba(28, 27, 25, 0.12);
 }
 .tcs {
@@ -277,7 +347,7 @@ button {
   height: 64px;
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: var(--white);
+  background: var(--surface);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -297,7 +367,7 @@ button {
 .tc.on {
   background: var(--ink);
   border-color: var(--ink);
-  color: var(--white);
+  color: var(--on-ink);
 }
 .tc:hover:not(.on) {
   border-color: var(--muted);
@@ -359,7 +429,7 @@ button {
   margin-top: 8px;
   padding: 16px;
   border-radius: 12px;
-  background: var(--white);
+  background: var(--surface);
   border: 1px solid var(--line);
   display: flex;
   flex-direction: column;
@@ -457,12 +527,14 @@ button {
   text-transform: uppercase;
 }
 .avatar.white {
-  background: var(--white);
-  color: var(--ink);
+  background: #fbf8f1;
+  color: #1c1b19;
+  border-color: var(--muted);
 }
 .avatar.black {
-  background: var(--ink);
-  color: var(--white);
+  background: #1c1b19;
+  color: #fbf8f1;
+  border-color: var(--muted);
 }
 .bot-ic {
   width: 18px;
@@ -530,7 +602,7 @@ button {
   height: 36px;
   padding: 0;
   border: none;
-  background: transparent;
+  background: var(--res-bg);
   border-radius: 8px;
   display: grid;
   place-items: center;
@@ -548,7 +620,7 @@ button {
   padding: 0 3px;
   border-radius: 8px;
   background: var(--ink);
-  color: var(--white);
+  color: var(--on-ink);
   font-size: 10px;
   font-weight: 700;
   line-height: 15px;
@@ -561,11 +633,11 @@ button {
   cursor: default;
 }
 .res.live:hover {
-  background: var(--seg);
+  box-shadow: 0 0 0 1px var(--muted);
 }
 .res.on {
   box-shadow: 0 0 0 2px var(--ink);
-  background: var(--white);
+  background: var(--res-on);
 }
 
 .clock {
@@ -590,11 +662,11 @@ button {
 }
 .clock.active {
   background: var(--ink);
-  color: var(--white);
+  color: var(--on-ink);
 }
 .clock.low {
   background: var(--red);
-  color: var(--white);
+  color: var(--on-ink);
 }
 .turn-tag {
   width: 108px;
@@ -607,7 +679,7 @@ button {
   color: transparent;
 }
 .turn-tag.on {
-  color: var(--white);
+  color: var(--on-ink);
   background: var(--ink);
   border-radius: 999px;
   padding: 6px 0;
@@ -648,8 +720,8 @@ button {
   pointer-events: none;
 }
 .promo-dot {
-  fill: var(--ink);
-  stroke: var(--white);
+  fill: #1c1b19;
+  stroke: #ffffff;
   stroke-width: 2;
   pointer-events: none;
 }
@@ -659,18 +731,18 @@ button {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(246, 244, 239, 0.55);
+  background: var(--overlay);
   padding: 16px;
 }
 .overlay.soft {
-  background: rgba(246, 244, 239, 0.72);
+  background: var(--overlay-strong);
 }
 .card {
   width: min(320px, 100%);
-  background: var(--white);
+  background: var(--surface);
   border-radius: 16px;
   padding: 24px;
-  box-shadow: 0 10px 40px rgba(28, 27, 25, 0.14);
+  box-shadow: var(--card-shadow);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -722,7 +794,7 @@ button {
   height: 60px;
   border-radius: 10px;
   border: 1px solid var(--line);
-  background: var(--white);
+  background: var(--res-on);
   display: grid;
   place-items: center;
   padding: 4px;
@@ -760,7 +832,7 @@ button {
 .moves .cur {
   justify-self: start;
   background: var(--ink);
-  color: var(--white);
+  color: var(--on-ink);
   border-radius: 5px;
   padding: 0 6px;
   margin-left: -6px;
@@ -778,7 +850,7 @@ button {
   bottom: 24px;
   transform: translate(-50%, 16px);
   background: var(--ink);
-  color: var(--white);
+  color: var(--on-ink);
   font-size: 14px;
   padding: 10px 16px;
   border-radius: 10px;
@@ -902,4 +974,147 @@ button {
   .lobby {
     padding-top: 32px;
   }
+}
+
+/* ---------- board squares (themeable) ---------- */
+
+.sq-l {
+  fill: var(--sq-light);
+}
+.sq-d {
+  fill: var(--sq-dark);
+}
+.sq-last-l {
+  fill: var(--sq-last-light);
+}
+.sq-last-d {
+  fill: var(--sq-last-dark);
+}
+.sq-sel-l {
+  fill: var(--sq-sel-light);
+}
+.sq-sel-d {
+  fill: var(--sq-sel-dark);
+}
+.coord.on-l {
+  fill: var(--sq-dark);
+}
+.coord.on-d {
+  fill: var(--sq-light);
+}
+
+/* ---------- move history (issue #3) ---------- */
+
+.moves .mv {
+  border: none;
+  background: none;
+  padding: 0 6px;
+  margin-left: -6px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  border-radius: 5px;
+  justify-self: start;
+  cursor: pointer;
+}
+.moves .mv:hover:not(.cur) {
+  background: var(--seg);
+}
+.moves .mv.cur {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.nav {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-top: 10px;
+}
+.nav-btn {
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ink);
+}
+.nav-btn:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+.nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.board-wrap.past .board {
+  filter: saturate(0.75);
+}
+.history-banner {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--on-ink);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--card-shadow);
+}
+.history-banner .link {
+  color: var(--on-ink);
+  font-weight: 600;
+}
+
+/* ---------- planning arrows and circles (issue #4) ---------- */
+
+.mark-arrow {
+  stroke-width: 15;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+.mark-arrow.preview {
+  opacity: 0.5;
+}
+.mark-circle {
+  fill: none;
+  stroke-width: 7;
+  opacity: 0.85;
+}
+.mark-green {
+  stroke: #15781b;
+}
+.mark-red {
+  stroke: #b3261e;
+}
+.mark-blue {
+  stroke: #0b5cad;
+}
+.mark-green-fill {
+  fill: #15781b;
+}
+.mark-red-fill {
+  fill: #b3261e;
+}
+.mark-blue-fill {
+  fill: #0b5cad;
+}
+
+/* ---------- theme and sound toggles ---------- */
+
+.brand-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.brand-tools .conn {
+  margin-left: 8px;
+}
+.icon-btn {
+  color: var(--ink);
 }

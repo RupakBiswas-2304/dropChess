@@ -102,6 +102,11 @@ struct Room {
 }
 
 impl Room {
+    /// The seat held by a live connection.
+    fn seat_of_conn(&self, conn_id: u64) -> Option<usize> {
+        (0..2).find(|&i| matches!(&self.seats[i], Some(s) if matches!(s.conn, Some((c, _)) if c == conn_id)))
+    }
+
     fn seat_of_token(&self, token: &str) -> Option<usize> {
         (0..2).find(|&i| matches!(&self.seats[i], Some(s) if s.token == token))
     }
@@ -225,6 +230,8 @@ impl Room {
             "check": check,
             "lastMove": self.game.moves().last().map(Move::uci),
             "sans": self.game.sans(),
+            "fens": self.game.fens(),
+            "ucis": self.game.moves().iter().map(Move::uci).collect::<Vec<_>>(),
             "players": { "white": player(0), "black": player(1) },
             "rematch": { "white": self.rematch[0], "black": self.rematch[1] },
             "clock": self.clock_json(),
@@ -358,8 +365,9 @@ async fn handle_socket(socket: WebSocket, state: Shared) {
         }
     });
 
-    // The room + seat this connection is attached to.
-    let mut attached: Option<(String, usize)> = None;
+    // The room this connection is in. Its seat is looked up by connection id on
+    // every message, because a rematch swaps seats (issue #5).
+    let mut attached: Option<String> = None;
 
     while let Some(Ok(msg)) = stream.next().await {
         let text = match msg {
@@ -382,8 +390,8 @@ async fn handle_socket(socket: WebSocket, state: Shared) {
 }
 
 /// Removes this connection from its seat (the seat stays reserved for a rejoin).
-fn detach(state: &Shared, conn_id: u64, attached: &mut Option<(String, usize)>) {
-    if let Some((room_id, _)) = attached.take() {
+fn detach(state: &Shared, conn_id: u64, attached: &mut Option<String>) {
+    if let Some(room_id) = attached.take() {
         let mut rooms = state.rooms.lock().unwrap();
         if let Some(room) = rooms.get_mut(&room_id) {
             for seat in room.seats.iter_mut().flatten() {
@@ -397,7 +405,7 @@ fn detach(state: &Shared, conn_id: u64, attached: &mut Option<(String, usize)>) 
     }
 }
 
-fn handle_msg(state: &Shared, conn_id: u64, tx: &Tx, attached: &mut Option<(String, usize)>, msg: ClientMsg) {
+fn handle_msg(state: &Shared, conn_id: u64, tx: &Tx, attached: &mut Option<String>, msg: ClientMsg) {
     match msg {
         ClientMsg::List => {
             let rooms = state.rooms.lock().unwrap();
@@ -467,7 +475,7 @@ fn handle_msg(state: &Shared, conn_id: u64, tx: &Tx, attached: &mut Option<(Stri
             if let Some(room) = rooms.get_mut(&id) {
                 maybe_bot_move(state, room);
             }
-            *attached = Some((id, seat_idx));
+            *attached = Some(id);
         }
         ClientMsg::Join { room, name } => {
             let room_id = room.trim().to_uppercase();
@@ -481,7 +489,7 @@ fn handle_msg(state: &Shared, conn_id: u64, tx: &Tx, attached: &mut Option<(Stri
             room.last_activity = Instant::now();
             joined(tx, room, &token, seat_idx);
             room.broadcast_state();
-            *attached = Some((room_id, seat_idx));
+            *attached = Some(room_id);
         }
         ClientMsg::Rejoin { room, token } => {
             let room_id = room.trim().to_uppercase();
@@ -495,12 +503,13 @@ fn handle_msg(state: &Shared, conn_id: u64, tx: &Tx, attached: &mut Option<(Stri
             room.last_activity = Instant::now();
             joined(tx, room, &token, seat_idx);
             room.broadcast_state();
-            *attached = Some((room_id, seat_idx));
+            *attached = Some(room_id);
         }
         ClientMsg::Move { uci } => {
-            let Some((room_id, seat_idx)) = attached.clone() else { return err(tx, "not in a game") };
+            let Some(room_id) = attached.clone() else { return err(tx, "not in a game") };
             let mut rooms = state.rooms.lock().unwrap();
             let Some(room) = rooms.get_mut(&room_id) else { return err(tx, "game not found") };
+            let Some(seat_idx) = room.seat_of_conn(conn_id) else { return err(tx, "not a player in that game") };
             if !room.local {
                 if room.seats[1 - seat_idx].is_none() {
                     return err(tx, "waiting for an opponent");
@@ -527,9 +536,10 @@ fn handle_msg(state: &Shared, conn_id: u64, tx: &Tx, attached: &mut Option<(Stri
             maybe_bot_move(state, room);
         }
         ClientMsg::Resign => {
-            let Some((room_id, seat_idx)) = attached.clone() else { return err(tx, "not in a game") };
+            let Some(room_id) = attached.clone() else { return err(tx, "not in a game") };
             let mut rooms = state.rooms.lock().unwrap();
             let Some(room) = rooms.get_mut(&room_id) else { return };
+            let Some(seat_idx) = room.seat_of_conn(conn_id) else { return err(tx, "not a player in that game") };
             let loser = if room.local {
                 room.game.pos.side
             } else if seat_idx == 0 {
@@ -542,9 +552,10 @@ fn handle_msg(state: &Shared, conn_id: u64, tx: &Tx, attached: &mut Option<(Stri
             room.broadcast_state();
         }
         ClientMsg::Rematch => {
-            let Some((room_id, seat_idx)) = attached.clone() else { return err(tx, "not in a game") };
+            let Some(room_id) = attached.clone() else { return err(tx, "not in a game") };
             let mut rooms = state.rooms.lock().unwrap();
             let Some(room) = rooms.get_mut(&room_id) else { return };
+            let Some(seat_idx) = room.seat_of_conn(conn_id) else { return err(tx, "not a player in that game") };
             if !room.game.status().is_over() {
                 return err(tx, "the game is still going");
             }
@@ -575,14 +586,10 @@ fn handle_msg(state: &Shared, conn_id: u64, tx: &Tx, attached: &mut Option<(Stri
             }
             room.broadcast_state();
             maybe_bot_move(state, room);
-            // Seat indices changed on swap: fix this connection's record.
-            if let Some(idx) = room.seats.iter().position(|s| matches!(s, Some(s) if matches!(s.conn, Some((c, _)) if c == conn_id))) {
-                *attached = Some((room_id, idx));
-            }
         }
         ClientMsg::Ping => send(tx, json!({ "t": "pong" })),
         ClientMsg::Leave => {
-            let Some((room_id, seat_idx)) = attached.clone() else { return };
+            let Some(room_id) = attached.clone() else { return };
             {
                 let mut rooms = state.rooms.lock().unwrap();
                 if rooms.get(&room_id).is_some_and(|r| r.local || r.bot.is_some()) {
@@ -591,6 +598,10 @@ fn handle_msg(state: &Shared, conn_id: u64, tx: &Tx, attached: &mut Option<(Stri
                     return;
                 }
                 if let Some(room) = rooms.get_mut(&room_id) {
+                    let Some(seat_idx) = room.seat_of_conn(conn_id) else {
+                        *attached = None;
+                        return;
+                    };
                     if !room.game.status().is_over() && room.seats[1 - seat_idx].is_some() && !room.game.moves().is_empty() {
                         let me = if seat_idx == 0 { Color::White } else { Color::Black };
                         room.game.force_end(Status::Abandoned { winner: me.opp() });
@@ -767,4 +778,87 @@ async fn main() {
         None => println!("  on your network: http://<this computer's IP>:{port}"),
     }
     axum::serve(listener, app).await.expect("server error");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Client {
+        id: u64,
+        tx: Tx,
+        rx: mpsc::UnboundedReceiver<String>,
+        attached: Option<String>,
+    }
+
+    impl Client {
+        fn new(id: u64) -> Client {
+            let (tx, rx) = mpsc::unbounded_channel();
+            Client { id, tx, rx, attached: None }
+        }
+        fn send(&mut self, state: &Shared, msg: Value) {
+            let msg: ClientMsg = serde_json::from_value(msg).unwrap();
+            handle_msg(state, self.id, &self.tx, &mut self.attached, msg);
+        }
+        /// All messages received so far, parsed.
+        fn drain(&mut self) -> Vec<Value> {
+            let mut out = vec![];
+            while let Ok(m) = self.rx.try_recv() {
+                out.push(serde_json::from_str(&m).unwrap());
+            }
+            out
+        }
+        fn last_joined_color(&mut self) -> String {
+            let msgs = self.drain();
+            let j = msgs.iter().rev().find(|m| m["t"] == "joined").expect("joined message");
+            j["color"].as_str().unwrap().to_string()
+        }
+    }
+
+    fn errors(msgs: &[Value]) -> Vec<String> {
+        msgs.iter().filter(|m| m["t"] == "error").map(|m| m["msg"].as_str().unwrap().to_string()).collect()
+    }
+
+    /// Issue #5: after a rematch swaps colours, both players must be able to move,
+    /// whichever of them sent the final rematch request.
+    #[test]
+    fn both_players_can_move_after_rematch() {
+        for final_by_a in [true, false] {
+            let state: Shared = Arc::new(AppState::default());
+            let (mut a, mut b) = (Client::new(1), Client::new(2));
+            a.send(&state, json!({"t": "create", "variant": "drop", "color": "white", "name": "A"}));
+            let room = a.drain().iter().find(|m| m["t"] == "joined").unwrap()["room"].as_str().unwrap().to_string();
+            b.send(&state, json!({"t": "join", "room": room, "name": "B"}));
+            a.send(&state, json!({"t": "move", "uci": "P@e2"}));
+            b.send(&state, json!({"t": "resign"}));
+            a.drain();
+            b.drain();
+            if final_by_a {
+                b.send(&state, json!({"t": "rematch"}));
+                a.send(&state, json!({"t": "rematch"}));
+            } else {
+                a.send(&state, json!({"t": "rematch"}));
+                b.send(&state, json!({"t": "rematch"}));
+            }
+            assert_eq!(a.last_joined_color(), "black");
+            assert_eq!(b.last_joined_color(), "white");
+            b.send(&state, json!({"t": "move", "uci": "N@c3"}));
+            assert!(errors(&b.drain()).is_empty(), "new White could not move");
+            a.send(&state, json!({"t": "move", "uci": "N@c6"}));
+            assert!(errors(&a.drain()).is_empty(), "new Black could not move");
+            let rooms = state.rooms.lock().unwrap();
+            assert_eq!(rooms[&room].game.moves().len(), 2);
+        }
+    }
+
+    #[test]
+    fn moving_out_of_turn_is_rejected() {
+        let state: Shared = Arc::new(AppState::default());
+        let (mut a, mut b) = (Client::new(1), Client::new(2));
+        a.send(&state, json!({"t": "create", "variant": "drop", "color": "white", "name": "A"}));
+        let room = a.drain().iter().find(|m| m["t"] == "joined").unwrap()["room"].as_str().unwrap().to_string();
+        b.send(&state, json!({"t": "join", "room": room, "name": "B"}));
+        b.send(&state, json!({"t": "move", "uci": "N@c6"}));
+        assert_eq!(errors(&b.drain()), vec!["not your turn".to_string()]);
+    }
 }

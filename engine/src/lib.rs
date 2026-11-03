@@ -693,6 +693,8 @@ impl Status {
 pub struct Game {
     pub pos: Position,
     history: Vec<String>,
+    /// FEN of every position so far: the start position first, the current one last.
+    fens: Vec<String>,
     moves: Vec<Move>,
     sans: Vec<String>,
     forced: Option<Status>,
@@ -708,7 +710,7 @@ impl Game {
     }
 
     pub fn from_position(pos: Position) -> Game {
-        Game { history: vec![pos.repetition_key()], pos, moves: vec![], sans: vec![], forced: None }
+        Game { history: vec![pos.repetition_key()], fens: vec![pos.fen()], pos, moves: vec![], sans: vec![], forced: None }
     }
 
     pub fn variant(&self) -> Variant {
@@ -719,6 +721,10 @@ impl Game {
     }
     pub fn sans(&self) -> &[String] {
         &self.sans
+    }
+    /// FEN of every position so far (start first, current last); `fens()[i]` is the position after `i` moves.
+    pub fn fens(&self) -> &[String] {
+        &self.fens
     }
     /// Repetition keys of every position so far, the current one last.
     pub fn history(&self) -> &[String] {
@@ -749,6 +755,7 @@ impl Game {
         let san = self.pos.san(m);
         self.pos.make(m);
         self.history.push(self.pos.repetition_key());
+        self.fens.push(self.pos.fen());
         self.moves.push(m);
         self.sans.push(san);
         Ok(())
@@ -915,6 +922,17 @@ mod tests {
         assert_eq!(g.status(), Status::Insufficient);
         let g = Game::new(Variant::Drop);
         assert_eq!(g.status(), Status::Ongoing);
+    }
+
+    #[test]
+    fn fen_history_has_one_entry_per_position() {
+        let mut g = Game::new(Variant::Drop);
+        g.play_uci("N@f3").unwrap();
+        g.play_uci("e8d8").unwrap();
+        assert_eq!(g.fens().len(), 3);
+        assert_eq!(g.fens()[0], START_FEN);
+        assert_eq!(g.fens()[2], g.pos.fen());
+        assert!(g.fens()[1].starts_with("4k3/8/8/8/8/5N2/8/4K3[QRRBBNPPPPPPPPqrrbbnnpppppppp] b"));
     }
 
     #[test]

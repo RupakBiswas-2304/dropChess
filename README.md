@@ -53,6 +53,10 @@ Checkmate wins. Everything else follows standard chess, with these clarification
 - **A trained bot** in three strengths, for either colour and either variant.
 - **Chess clocks**: 1+0, 3+2, 5+3, 10+0, 15+10, or untimed. The server keeps time, so clocks cannot be tampered with.
 - **Server-authoritative rules**: every move is validated by the Rust engine. Clients receive the position and the list of legal moves.
+- **Move history**: step through the game with the ‹ › buttons or the arrow keys (Home and End jump to the start and the live position), or click any move in the list.
+- **Planning arrows**: right-drag between squares to draw an arrow, right-click a square to circle it. Hold Shift for red, Alt or Ctrl for blue. A left click or the next move clears them.
+- **Move sounds** for moves, drops, captures, checks, game start and end, and a low-time warning. They are synthesised in the browser and can be muted from the top bar.
+- **Light and dark themes**, following your system setting by default.
 - **Reconnects** automatically after a refresh or a dropped connection.
 - **Responsive, minimal interface** that works on desktop and mobile.
 
@@ -209,7 +213,7 @@ The client and server exchange JSON messages over a WebSocket at `/ws`.
 | | `move {uci}` · `resign` · `rematch` · `leave` | In-game actions. |
 | | `list` · `ping` | Open games; keep-alive. |
 | Server → client | `joined {room, token, color, bot}` | Seat assignment. |
-| | `state {...}` | Full game state: board, reserves, legal moves, status, move list, clocks. |
+| | `state {...}` | Full game state: board, reserves, legal moves, status, move list (SAN and UCI), the FEN after every move, clocks. |
 | | `rooms` · `error {msg}` · `pong` | Lobby list, errors, keep-alive. |
 
 Moves use UCI notation, with drops written as `N@f3`, `P@d4`. Positions use Crazyhouse-style FEN with the reserve in brackets:
