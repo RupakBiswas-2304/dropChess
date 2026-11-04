@@ -1149,3 +1149,14 @@ button {
 .seg-center button {
   align-content: center;
 }
+
+.gh-link {
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+}
+.gh-link svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
