@@ -56,7 +56,8 @@ Checkmate wins. Everything else follows standard chess, with these clarification
 - **Move history**: step through the game with the ‹ › buttons or the arrow keys (Home and End jump to the start and the live position), or click any move in the list.
 - **Planning arrows**: right-drag between squares to draw an arrow, right-click a square to circle it. Hold Shift for red, Alt or Ctrl for blue. A left click or the next move clears them.
 - **Move sounds** for moves, drops, captures, checks, game start and end, and a low-time warning. They are synthesised in the browser and can be muted from the top bar.
-- **Light and dark themes**, following your system setting by default.
+- **Drag and drop or click**: drag a piece (or a piece from your reserve) to its square, or click the piece and then the square.
+- **Light and dark themes**: pick Auto, Light or Dark under Appearance in the lobby, or use the sun/moon button in the top bar.
 - **Reconnects** automatically after a refresh or a dropped connection.
 - **Responsive, minimal interface** that works on desktop and mobile.
 
