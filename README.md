@@ -255,6 +255,10 @@ Drop Chess is released under the [PolyForm Noncommercial License 1.0.0](LICENSE.
 
 Third-party assets keep their own licenses: the chess pieces are BSD 3-Clause and the Inter typeface is under the SIL Open Font License (see Credits).
 
+## Analytics
+
+The hosted site uses [Cloudflare Web Analytics](https://www.cloudflare.com/web-analytics/) to count visits. It sets no cookies and doesn't track individual visitors. If you run your own copy, remove the Cloudflare script near the end of `web/index.html` or replace its token with your own.
+
 ## Credits
 
 - Chess pieces: the "cburnett" set by Colin M.L. Burnett, used under the BSD 3-Clause license (see [`web/src/pieces/LICENSE`](web/src/pieces/LICENSE)).
