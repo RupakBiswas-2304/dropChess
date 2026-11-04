@@ -13,7 +13,7 @@ import {
   type TimeControl,
   type Variant,
 } from "./net";
-import { applyTheme, cycleTheme, effectiveTheme, themeChoice, themeLabel } from "./theme";
+import { applyTheme, effectiveTheme, setTheme, themeChoice, toggleTheme, type ThemeChoice } from "./theme";
 import { play, soundEnabled, soundForSan, toggleSound } from "./sound";
 import { parseFen, type Reserve } from "./fen";
 import { annotationsSvg, clearAnnotations, colorFor, hasAnnotations, toggleMark, type Arrow } from "./annotations";
@@ -51,6 +51,9 @@ interface UI {
   drawing: { from: number; to: number; color: Arrow["color"] } | null;
   /** The low-time warning sound has played for this game. */
   lowWarned: boolean;
+  /** Board square whose piece is being dragged (drawn faded), and the square under the pointer (issue #8). */
+  dragFrom: number | null;
+  dragOver: number | null;
 }
 
 const TIME_CONTROLS: { label: string; speed: string; tc: TimeControl | null }[] = [
@@ -105,6 +108,8 @@ const ui: UI = {
   viewPly: null,
   drawing: null,
   lowWarned: false,
+  dragFrom: null,
+  dragOver: null,
 };
 applyTheme();
 if (!["easy", "medium", "hard"].includes(ui.botLevel)) ui.botLevel = "medium";
@@ -444,6 +449,13 @@ function renderLobby() {
       <div class="tcs">${chips}</div>
     </section>
 
+    <section>
+      <div class="label">APPEARANCE</div>
+      <div class="seg seg-center">${(["system", "light", "dark"] as ThemeChoice[])
+        .map((t) => `<button data-action="theme-set" data-t="${t}" class="${themeChoice() === t ? "on" : ""}"><b>${t === "system" ? "Auto" : cap(t)}</b>${t === "system" ? `<span>follows your device</span>` : ""}</button>`)
+        .join("")}</div>
+    </section>
+
     <section class="actions-col">
       <button class="btn primary big" data-action="create">Create game</button>
       <div class="row">
@@ -620,10 +632,13 @@ function renderBoard(): string {
     if (dropping && (v.side === "white" ? r <= 3 : r >= 4)) cells += `<rect x="${x}" y="${y}" width="100" height="100" class="zone"/>`;
     if (v.check === sq) cells += `<rect x="${x}" y="${y}" width="100" height="100" fill="url(#checkGlow)"/>`;
     const p = v.board[sq];
-    if (p) {
+    if (p && ui.dragFrom === sq) {
+      pieces += `<g opacity="0.3">${pieceUse(p.c, p.k, x + 3, y + 3, 94)}</g>`;
+    } else if (p) {
       pieces += pieceUse(p.c, p.k, x + 3, y + 3, 94);
       if (p.promoted) pieces += `<circle cx="${x + 86}" cy="${y + 14}" r="6" class="promo-dot"/>`;
     }
+    if (tg.has(sq) && ui.dragOver === sq) marks += `<rect x="${x + 2}" y="${y + 2}" width="96" height="96" class="drag-over"/>`;
     if (tg.has(sq)) {
       marks += p
         ? `<circle cx="${x + 50}" cy="${y + 50}" r="44" class="tgt-ring"/>`
@@ -775,7 +790,6 @@ function renderNav(): string {
 }
 
 const THEME_ICON = {
-  system: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
   light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   dark: '<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
 };
@@ -788,9 +802,11 @@ const svgIcon = (paths: string) =>
 
 /** Theme and sound toggles, shown in the lobby and the game's top bar. */
 function prefButtons(): string {
-  const t = themeChoice();
+  // The button shows where it takes you: a sun in dark mode, a moon in light mode.
+  const dark = effectiveTheme() === "dark";
+  const label = dark ? "Switch to light mode" : "Switch to dark mode";
   const on = soundEnabled();
-  return `<button class="icon-btn" data-action="theme" title="${themeLabel(t)}" aria-label="${themeLabel(t)}">${svgIcon(THEME_ICON[t])}</button>
+  return `<button class="icon-btn" data-action="theme" title="${label}" aria-label="${label}">${svgIcon(dark ? THEME_ICON.light : THEME_ICON.dark)}</button>
     <button class="icon-btn" data-action="sound" title="${on ? "Sound on" : "Sound off"}" aria-label="${on ? "Sound on" : "Sound off"}">${svgIcon(on ? SOUND_ICON.on : SOUND_ICON.off)}</button>`;
 }
 
@@ -891,6 +907,11 @@ function onSquare(sq: number) {
 const app = document.getElementById("app")!;
 
 app.addEventListener("click", (e) => {
+  if (suppressClick) {
+    // This click is the tail end of a drag that already made (or cancelled) the move.
+    suppressClick = false;
+    return;
+  }
   const el = (e.target as Element).closest<HTMLElement | SVGElement>("[data-action]");
   if (!el) return;
   const d = (el as HTMLElement).dataset;
@@ -952,10 +973,13 @@ app.addEventListener("click", (e) => {
       navigate(d.to!);
       break;
     case "theme":
-      cycleTheme();
-      showToast(`${themeLabel()}${themeChoice() === "system" ? ` (${effectiveTheme()})` : ""}`);
+      toggleTheme();
       if (ui.screen === "game") renderGame();
       else renderLobby();
+      break;
+    case "theme-set":
+      setTheme(d.t as ThemeChoice);
+      renderLobby();
       break;
     case "sound":
       showToast(toggleSound() ? "Sound on" : "Sound off");
@@ -1042,6 +1066,118 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     navigate(keys[e.key]);
   }
+});
+
+// ---------- drag and drop (issue #8) ----------
+// Press on one of your pieces (or a reserve piece) and move a few pixels to start
+// dragging; release on a highlighted square to play the move. A press without
+// movement is an ordinary click, so click-to-move keeps working unchanged.
+
+interface Drag {
+  from: NonNullable<Selection>;
+  piece: { c: Side; k: string };
+  x0: number;
+  y0: number;
+  active: boolean;
+  ghost: HTMLElement | null;
+}
+let drag: Drag | null = null;
+let suppressClick = false;
+const DRAG_THRESHOLD = 5;
+
+function dragStartFrom(target: EventTarget | null): Drag["from"] | null {
+  const s = ui.state;
+  if (!s || !canMove()) return null;
+  const el = target as Element | null;
+  const res = el?.closest?.("button.res.live") as HTMLElement | null;
+  if (res) return { type: "drop", kind: res.dataset.kind! };
+  const sq = hitSquare(el);
+  if (sq === null) return null;
+  const p = s.board[sq];
+  if (!p || (p.c === "w" ? "white" : "black") !== s.side || legalFrom(sq).length === 0) return null;
+  return { type: "sq", sq };
+}
+
+function boardSquareSize(): number {
+  const svg = document.querySelector("svg.board");
+  return svg ? svg.getBoundingClientRect().width / 8 : 64;
+}
+
+function moveGhost(d: Drag, x: number, y: number) {
+  if (!d.ghost) return;
+  const size = d.ghost.offsetWidth;
+  d.ghost.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+}
+
+function endDrag() {
+  drag?.ghost?.remove();
+  drag = null;
+  ui.dragFrom = null;
+  ui.dragOver = null;
+}
+
+app.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || !e.isPrimary) return;
+  const from = dragStartFrom(e.target);
+  if (!from) return;
+  const s = ui.state!;
+  const piece =
+    from.type === "sq"
+      ? { c: s.board[from.sq]!.c as Side, k: s.board[from.sq]!.k as string }
+      : { c: (s.side === "white" ? "w" : "b") as Side, k: from.kind };
+  drag = { from, piece, x0: e.clientX, y0: e.clientY, active: false, ghost: null };
+  if ((e.target as Element).closest("svg.board")) e.preventDefault(); // no text selection or native image drag
+});
+
+window.addEventListener("pointermove", (e) => {
+  if (!drag || !e.isPrimary) return;
+  if (!drag.active) {
+    if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < DRAG_THRESHOLD) return;
+    drag.active = true;
+    ui.selected = drag.from;
+    ui.promo = null;
+    ui.dragFrom = drag.from.type === "sq" ? drag.from.sq : null;
+    const size = boardSquareSize();
+    const ghost = document.createElement("div");
+    ghost.className = "drag-ghost";
+    ghost.style.width = ghost.style.height = `${size}px`;
+    ghost.innerHTML = pieceIcon(drag.piece.c, drag.piece.k);
+    document.body.appendChild(ghost);
+    drag.ghost = ghost;
+    renderGame();
+  }
+  moveGhost(drag, e.clientX, e.clientY);
+  const over = hitSquare(document.elementFromPoint(e.clientX, e.clientY));
+  if (over !== ui.dragOver) {
+    ui.dragOver = over;
+    renderGame();
+  }
+});
+
+window.addEventListener("pointerup", (e) => {
+  if (!drag || e.button !== 0) return;
+  const d = drag;
+  const wasActive = d.active;
+  endDrag();
+  if (!wasActive) return; // a plain click: the click handler takes it from here
+  suppressClick = true;
+  window.setTimeout(() => (suppressClick = false), 0);
+  const sq = hitSquare(document.elementFromPoint(e.clientX, e.clientY));
+  if (sq !== null && targets().has(sq)) {
+    onSquare(sq); // plays the move, or opens the promotion picker
+    return;
+  }
+  // Released on its own square: stay selected, so a click on the target still works.
+  // Released anywhere else: cancel.
+  if (!(d.from.type === "sq" && sq === d.from.sq)) ui.selected = null;
+  renderGame();
+});
+
+window.addEventListener("pointercancel", () => {
+  if (!drag) return;
+  endDrag();
+  ui.selected = null;
+  if (ui.screen === "game") renderGame();
 });
 
 // ---------- planning arrows (right mouse button) ----------

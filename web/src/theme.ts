@@ -36,7 +36,16 @@ export function applyTheme() {
 
 /** Cycles system → light → dark and returns the new choice. */
 export function cycleTheme(): ThemeChoice {
-  choice = ORDER[(ORDER.indexOf(choice) + 1) % ORDER.length];
+  return setTheme(ORDER[(ORDER.indexOf(choice) + 1) % ORDER.length]);
+}
+
+/** Switches straight to the opposite of what is showing now (the top-bar button). */
+export function toggleTheme(): ThemeChoice {
+  return setTheme(effectiveTheme() === "dark" ? "light" : "dark");
+}
+
+export function setTheme(next: ThemeChoice): ThemeChoice {
+  choice = next;
   try {
     if (choice === "system") localStorage.removeItem(KEY);
     else localStorage.setItem(KEY, choice);

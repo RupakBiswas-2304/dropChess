@@ -1118,3 +1118,34 @@ button {
 .icon-btn {
   color: var(--ink);
 }
+
+/* ---------- drag and drop (issue #8) ---------- */
+
+.board,
+.res.live {
+  touch-action: none; /* let a finger drag pieces instead of scrolling the page */
+}
+.drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 50;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.3));
+  will-change: transform;
+}
+.drag-ghost .pi {
+  width: 100%;
+  height: 100%;
+  display: block;
+  transform: scale(1.08);
+}
+.drag-over {
+  fill: none;
+  stroke: rgba(28, 27, 25, 0.45);
+  stroke-width: 4;
+  pointer-events: none;
+}
+.seg-center button {
+  align-content: center;
+}
