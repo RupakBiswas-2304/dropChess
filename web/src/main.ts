@@ -14,6 +14,10 @@ import {
   type Variant,
 } from "./net";
 import { applyTheme, effectiveTheme, toggleTheme } from "./theme";
+// GitHub's own mark from @primer/octicons (MIT); only this one file is bundled.
+import githubMark from "@primer/octicons/build/svg/mark-github-16.svg?raw";
+
+const REPO_URL = "https://github.com/RupakBiswas-2304/dropChess";
 import { play, soundEnabled, soundForSan, toggleSound } from "./sound";
 import { parseFen, type Reserve } from "./fen";
 import { annotationsSvg, clearAnnotations, colorFor, hasAnnotations, toggleMark, type Arrow } from "./annotations";
@@ -418,7 +422,7 @@ function renderLobby() {
   app.innerHTML = `
   <main class="lobby">
     <header>
-      <div class="brand-row">${wordmark(22)}<div class="brand-tools">${prefButtons()}<span id="conn" class="conn ${ui.connected ? "on" : "off"}"></span></div></div>
+      <div class="brand-row">${wordmark(22)}<div class="brand-tools"><a class="icon-btn gh-link" href="${REPO_URL}" target="_blank" rel="noopener" title="Source code on GitHub" aria-label="Source code on GitHub">${githubMark}</a>${prefButtons()}<span id="conn" class="conn ${ui.connected ? "on" : "off"}"></span></div></div>
       <p class="tag">Start with only your king. Each turn, drop a piece on your half or make a move.</p>
       <details class="how"><summary>How to play</summary>
         <ul>

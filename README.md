@@ -260,5 +260,6 @@ Third-party assets keep their own licenses: the chess pieces are BSD 3-Clause an
 - Chess pieces: the "cburnett" set by Colin M.L. Burnett, used under the BSD 3-Clause license (see [`web/src/pieces/LICENSE`](web/src/pieces/LICENSE)).
 - Typeface: [Inter](https://rsms.me/inter/) by Rasmus Andersson (SIL Open Font License), bundled through `@fontsource/inter`.
 - Neural network inference: [tract](https://github.com/sonos/tract).
+- GitHub icon: the GitHub mark from [Octicons](https://github.com/primer/octicons) (MIT), used to link to this repository.
 - Reference rules implementation for testing: [python-chess](https://python-chess.readthedocs.io).
 - Method: Silver et al., *A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play*, Science, 2018.
