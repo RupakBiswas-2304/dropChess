@@ -13,7 +13,7 @@ import {
   type TimeControl,
   type Variant,
 } from "./net";
-import { applyTheme, effectiveTheme, setTheme, themeChoice, toggleTheme, type ThemeChoice } from "./theme";
+import { applyTheme, effectiveTheme, toggleTheme } from "./theme";
 import { play, soundEnabled, soundForSan, toggleSound } from "./sound";
 import { parseFen, type Reserve } from "./fen";
 import { annotationsSvg, clearAnnotations, colorFor, hasAnnotations, toggleMark, type Arrow } from "./annotations";
@@ -447,13 +447,6 @@ function renderLobby() {
     <section>
       <div class="label">TIME</div>
       <div class="tcs">${chips}</div>
-    </section>
-
-    <section>
-      <div class="label">APPEARANCE</div>
-      <div class="seg seg-center">${(["system", "light", "dark"] as ThemeChoice[])
-        .map((t) => `<button data-action="theme-set" data-t="${t}" class="${themeChoice() === t ? "on" : ""}"><b>${t === "system" ? "Auto" : cap(t)}</b>${t === "system" ? `<span>follows your device</span>` : ""}</button>`)
-        .join("")}</div>
     </section>
 
     <section class="actions-col">
@@ -976,10 +969,6 @@ app.addEventListener("click", (e) => {
       toggleTheme();
       if (ui.screen === "game") renderGame();
       else renderLobby();
-      break;
-    case "theme-set":
-      setTheme(d.t as ThemeChoice);
-      renderLobby();
       break;
     case "sound":
       showToast(toggleSound() ? "Sound on" : "Sound off");
